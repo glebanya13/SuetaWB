@@ -5,6 +5,7 @@ class AdminService {
         this.bot = bot;
         this.userService = userService;
         this.adminChatId = adminChatId;
+        this.database = userService.db;
         this.pendingPayments = new Map();
         this.completedPayments = new Map();
         this.waitingForBroadcast = false;
@@ -49,7 +50,7 @@ class AdminService {
                 this.showPendingPayments(chatId);
                 break;
             case '📢 Рассылка сообщений':
-                const userCount = this.userService.getAllUsers().size;
+                const userCount = this.userService.getAllUsers().length;
                 if (userCount === 0) {
                     this.bot.sendMessage(chatId, '❌ Нет пользователей для рассылки. Сначала должны появиться пользователи.');
                 } else {
@@ -83,81 +84,91 @@ class AdminService {
     }
 
     showPendingPayments(chatId) {
-        let totalPending = this.pendingPayments.size;
-        let totalCompleted = this.completedPayments.size;
-        
-        if (totalPending === 0 && totalCompleted === 0) {
-            this.bot.sendMessage(chatId, '✅ Нет платежей');
-            return;
-        }
+        try {
+            const dbPendingPayments = this.database.getPendingPayments();
+            const dbCompletedPayments = this.database.getConfirmedPayments();
 
-        if (totalPending > 0) {
-            this.bot.sendMessage(chatId, `📋 ОЖИДАЮЩИЕ ПЛАТЕЖИ (${totalPending}):`);
-            
-            let counter = 1;
-            for (const [userChatId, paymentInfo] of this.pendingPayments) {
-                const message = `💰 Платеж ${counter}:
+            let totalPending = dbPendingPayments.length;
+            let totalCompleted = dbCompletedPayments.length;
 
-👤 Пользователь: ${paymentInfo.username || 'без username'}
-📅 Период: ${paymentInfo.period}
-💰 Сумма: ${paymentInfo.amount}₽
-⏰ Время: ${paymentInfo.timestamp}`;
-
-                const keyboard = {
-                    reply_markup: {
-                        inline_keyboard: [
-                            [
-                                { text: '✅ Подтвердить', callback_data: `confirm_direct_${userChatId}` },
-                                { text: '❌ Отклонить', callback_data: `reject_direct_${userChatId}` }
-                            ]
-                        ]
-                    }
-                };
-
-                if (paymentInfo.photoFileId) {
-                    try {
-                        this.bot.sendPhoto(chatId, paymentInfo.photoFileId, {
-                            caption: message,
-                            reply_markup: keyboard.reply_markup
-                        });
-                    } catch (error) {
-                        this.bot.sendMessage(chatId, message + '\n\n⚠️ Не удалось загрузить скриншот', keyboard);
-                    }
-                } else {
-                    this.bot.sendMessage(chatId, message + '\n\n📸 Скриншот отсутствует', keyboard);
-                }
-
-                counter++;
+            if (totalPending === 0 && totalCompleted === 0) {
+                this.bot.sendMessage(chatId, '✅ Нет платежей');
+                return;
             }
-        }
 
-        if (totalCompleted > 0) {
-            this.bot.sendMessage(chatId, `\n📋 ЗАВЕРШЕННЫЕ ПЛАТЕЖИ (${totalCompleted}):`);
-            
-            let counter = 1;
-            for (const [userChatId, paymentInfo] of this.completedPayments) {
-                const statusEmoji = paymentInfo.status === 'confirmed' ? '✅' : '❌';
-                const statusText = paymentInfo.status === 'confirmed' ? 'Подтвержден' : 'Отклонен';
-                
-                const message = `${statusEmoji} Платеж ${counter}:
 
-👤 Пользователь: ${paymentInfo.username || 'без username'}
-📅 Период: ${paymentInfo.period}
-💰 Сумма: ${paymentInfo.amount}₽
-📊 Статус: ${statusText}
-⏰ Завершен: ${paymentInfo.completedAt}`;
 
-                this.bot.sendMessage(chatId, message);
-                counter++;
-            }
-        }
-
-        const summaryMessage = `📊 ИТОГО:
+            const summaryMessage = `📊 Итого:
 ⏳ Ожидающих: ${totalPending}
-✅ Подтвержденных: ${Array.from(this.completedPayments.values()).filter(p => p.status === 'confirmed').length}
-❌ Отклоненных: ${Array.from(this.completedPayments.values()).filter(p => p.status === 'rejected').length}`;
+✅ Подтвержденных: ${dbCompletedPayments.filter(p => p.status === 'confirmed').length}
+❌ Отклоненных: ${dbCompletedPayments.filter(p => p.status === 'rejected').length}`;
 
-        this.bot.sendMessage(chatId, summaryMessage);
+            this.bot.sendMessage(chatId, summaryMessage);
+
+            if (totalPending > 0) {
+                this.bot.sendMessage(chatId, `\n📋 Ожидающие платежи (${totalPending}):`);
+
+                let counter = 1;
+                for (const payment of dbPendingPayments) {
+                    const message = `💰 Платеж ${counter}:
+
+👤 Пользователь: ${payment.username || 'без username'}
+📅 Период: ${payment.period}
+💰 Сумма: ${payment.amount}₽
+⏰ Время: ${payment.created_at}`;
+
+                    const keyboard = {
+                        reply_markup: {
+                            inline_keyboard: [
+                                [
+                                    { text: '✅ Подтвердить', callback_data: `confirm_direct_${payment.user_chat_id}` },
+                                    { text: '❌ Отклонить', callback_data: `reject_direct_${payment.user_chat_id}` }
+                                ]
+                            ]
+                        }
+                    };
+
+                    if (payment.photo_file_id) {
+                        try {
+                            this.bot.sendPhoto(chatId, payment.photo_file_id, {
+                                caption: message,
+                                reply_markup: keyboard.reply_markup
+                            });
+                        } catch (error) {
+                            this.bot.sendMessage(chatId, message + '\n\n⚠️ Не удалось загрузить скриншот', keyboard);
+                        }
+                    } else {
+                        this.bot.sendMessage(chatId, message + '\n\n📸 Скриншот отсутствует', keyboard);
+                    }
+
+                    counter++;
+                }
+            }
+
+            if (totalCompleted > 0) {
+                this.bot.sendMessage(chatId, `\n📋 Завершенные платежи (${totalCompleted}):`);
+
+                let counter = 1;
+                for (const payment of dbCompletedPayments) {
+                    const statusEmoji = payment.status === 'confirmed' ? '✅' : '❌';
+                    const statusText = payment.status === 'confirmed' ? 'Подтвержден' : 'Отклонен';
+
+                    const message = `${statusEmoji} Платеж ${counter}:
+
+👤 Пользователь: ${payment.username || 'без username'}
+📅 Период: ${payment.period}
+💰 Сумма: ${payment.amount}₽
+📊 Статус: ${statusText}
+⏰ Завершен: ${payment.updated_at}`;
+
+                    this.bot.sendMessage(chatId, message);
+                    counter++;
+                }
+            }
+        } catch (error) {
+            Logger.error('Ошибка при показе платежей', { chatId, error: error.message });
+            this.bot.sendMessage(chatId, '❌ Произошла ошибка при загрузке платежей');
+        }
     }
 
     addPendingPayment(userChatId, paymentInfo) {
@@ -169,38 +180,61 @@ class AdminService {
             first_name: paymentInfo.username || 'без имени',
             last_name: 'без фамилии'
         };
-        
-        const paymentId = Date.now();
-        
-        const numericKey = Number(userChatId);
-        this.pendingPayments.set(numericKey, {
-            ...paymentData,
-            id: paymentId,
-            timestamp: new Date().toLocaleString('ru-RU')
-        });
 
-        this.userService.addUser(userChatId, {
-            username: paymentInfo.username,
-            first_name: paymentInfo.username || 'без имени',
-            last_name: 'без фамилии'
-        });
-        
-        Logger.paymentEvent('новый платеж добавлен', userChatId, paymentInfo.amount, paymentInfo.period);
-        this.notifyAdmin(userChatId, paymentData);
+        try {
+            this.userService.addUser(userChatId, {
+                username: paymentInfo.username,
+                first_name: paymentInfo.username || 'без имени',
+                last_name: 'без фамилии'
+            });
+
+            const paymentId = this.database.addPayment(userChatId, paymentData);
+            Logger.info('💰 Платеж добавлен в БД с ID:', paymentId);
+
+            const numericKey = Number(userChatId);
+            this.pendingPayments.set(numericKey, {
+                ...paymentData,
+                id: paymentId,
+                timestamp: new Date().toLocaleString('ru-RU')
+            });
+
+            Logger.paymentEvent('новый платеж добавлен', userChatId, paymentInfo.amount, paymentInfo.period);
+            this.notifyAdmin(userChatId, paymentData);
+        } catch (error) {
+            Logger.error('Ошибка при добавлении платежа в БД', { userChatId, error: error.message });
+            const numericKey = Number(userChatId);
+            this.pendingPayments.set(numericKey, {
+                ...paymentData,
+                id: Date.now(),
+                timestamp: new Date().toLocaleString('ru-RU')
+            });
+        }
     }
 
     confirmPayment(userChatId, reason = 'Подтвержден администратором') {
-        let paymentInfo = this.pendingPayments.get(userChatId);
-        if (!paymentInfo) {
-            const numericKey = Number(userChatId);
-            paymentInfo = this.pendingPayments.get(numericKey);
+        let paymentInfo = null;
+        try {
+            const pendingPayments = this.database.getPendingPayments();
+            paymentInfo = pendingPayments.find(p => p.user_chat_id == userChatId);
+            Logger.info('🔍 Ищем платеж в БД для подтверждения:', { userChatId, found: !!paymentInfo });
+        } catch (error) {
+            Logger.error('Ошибка при поиске платежа в БД:', error.message);
         }
+
         if (!paymentInfo) {
-            const stringKey = userChatId.toString();
-            paymentInfo = this.pendingPayments.get(stringKey);
+            paymentInfo = this.pendingPayments.get(userChatId);
+            if (!paymentInfo) {
+                const numericKey = Number(userChatId);
+                paymentInfo = this.pendingPayments.get(numericKey);
+            }
+            if (!paymentInfo) {
+                const stringKey = userChatId.toString();
+                paymentInfo = this.pendingPayments.get(stringKey);
+            }
         }
-        
+
         if (!paymentInfo) {
+            Logger.warn('Платеж не найден для подтверждения:', { userChatId });
             return false;
         }
 
@@ -214,26 +248,29 @@ class AdminService {
 Спасибо за доверие! 🚀`;
 
         this.bot.sendMessage(userChatId, message);
-        
+
+        try {
+            const updated = this.database.updatePaymentStatusByUserId(userChatId, 'confirmed', reason);
+            Logger.info('Статус платежа обновлен в БД:', { userChatId, updated });
+        } catch (error) {
+            Logger.error('Ошибка при обновлении статуса в БД:', error.message);
+        }
+
         this.pendingPayments.delete(userChatId);
         this.pendingPayments.delete(Number(userChatId));
         this.pendingPayments.delete(userChatId.toString());
-        
+
         const completedPayment = {
             ...paymentInfo,
             status: 'confirmed',
             reason: reason,
             completedAt: new Date().toLocaleString('ru-RU')
         };
-        
+
         this.completedPayments.set(userChatId, completedPayment);
-        
-        this.userService.addUser(userChatId, {
-            username: paymentInfo.username,
-            first_name: paymentInfo.username || 'без имени',
-            last_name: 'без фамилии'
-        });
-        
+
+        Logger.info('Пользователь уже существует в БД, не добавляем повторно');
+
         this.bot.sendMessage(this.adminChatId, `✅ Платеж пользователя ${paymentInfo.username} подтвержден!`);
 
         Logger.paymentEvent('платеж подтвержден', userChatId, paymentInfo.amount, paymentInfo.period);
@@ -243,17 +280,29 @@ class AdminService {
     }
 
     rejectPayment(userChatId, reason = 'Платеж не найден') {
-        let paymentInfo = this.pendingPayments.get(userChatId);
-        if (!paymentInfo) {
-            const numericKey = Number(userChatId);
-            paymentInfo = this.pendingPayments.get(numericKey);
+        let paymentInfo = null;
+        try {
+            const pendingPayments = this.database.getPendingPayments();
+            paymentInfo = pendingPayments.find(p => p.user_chat_id == userChatId);
+            Logger.info('🔍 Ищем платеж в БД для отклонения:', { userChatId, found: !!paymentInfo });
+        } catch (error) {
+            Logger.error('Ошибка при поиске платежа в БД:', error.message);
         }
+
         if (!paymentInfo) {
-            const stringKey = userChatId.toString();
-            paymentInfo = this.pendingPayments.get(stringKey);
+            paymentInfo = this.pendingPayments.get(userChatId);
+            if (!paymentInfo) {
+                const numericKey = Number(userChatId);
+                paymentInfo = this.pendingPayments.get(numericKey);
+            }
+            if (!paymentInfo) {
+                const stringKey = userChatId.toString();
+                paymentInfo = this.pendingPayments.get(stringKey);
+            }
         }
-        
+
         if (!paymentInfo) {
+            Logger.warn('Платеж не найден для отклонения:', { userChatId });
             return false;
         }
 
@@ -264,20 +313,27 @@ class AdminService {
 Если у вас есть вопросы, обратитесь к администратору.`;
 
         this.bot.sendMessage(userChatId, message);
-        
+
+        try {
+            const updated = this.database.updatePaymentStatusByUserId(userChatId, 'rejected', reason);
+            Logger.info('Статус платежа отклонен в БД:', { userChatId, updated });
+        } catch (error) {
+            Logger.error('Ошибка при отклонении платежа в БД:', error.message);
+        }
+
         this.pendingPayments.delete(userChatId);
         this.pendingPayments.delete(Number(userChatId));
         this.pendingPayments.delete(userChatId.toString());
-        
+
         const completedPayment = {
             ...paymentInfo,
             status: 'rejected',
             reason: reason,
             completedAt: new Date().toLocaleString('ru-RU')
         };
-        
+
         this.completedPayments.set(userChatId, completedPayment);
-        
+
         this.bot.sendMessage(this.adminChatId, `❌ Платеж пользователя ${paymentInfo.username} отклонен!`);
 
         Logger.paymentEvent('платеж отклонен', userChatId, paymentInfo.amount, paymentInfo.period);
@@ -290,15 +346,21 @@ class AdminService {
         const data = query.data;
         const chatId = query.message.chat.id;
 
+        Logger.info('🔍 Обрабатываем админский callback:', { data, chatId });
+
         if (data.startsWith('confirm_direct_')) {
             const userChatId = data.replace('confirm_direct_', '');
+            Logger.info('✅ Подтверждаем платеж для пользователя:', userChatId);
             const result = this.confirmPayment(userChatId, 'Подтвержден администратором');
+            Logger.info('Результат подтверждения:', result);
             if (result) {
                 this.editMessageToRemoveButtons(query.message, '✅ Платеж подтвержден!');
             }
         } else if (data.startsWith('reject_direct_')) {
             const userChatId = data.replace('reject_direct_', '');
+            Logger.info('❌ Отклоняем платеж для пользователя:', userChatId);
             const result = this.rejectPayment(userChatId, 'Отклонен администратором');
+            Logger.info('Результат отклонения:', result);
             if (result) {
                 this.editMessageToRemoveButtons(query.message, '❌ Платеж отклонен!');
             }
@@ -307,8 +369,6 @@ class AdminService {
         }
     }
 
-
-
     startBroadcast(chatId) {
         this.waitingForBroadcast = true;
         this.bot.sendMessage(chatId, '📢 Введите текст сообщения для рассылки всем пользователям:');
@@ -316,14 +376,14 @@ class AdminService {
 
     async sendBroadcast(message, adminChatId) {
         this.waitingForBroadcast = false;
-        
+
         const allUsers = this.userService.getAllUsers();
-        
-        Logger.info('🔍 Начинаем рассылку', { 
-            totalUsers: allUsers ? allUsers.length : 0, 
-            users: allUsers ? allUsers : [] 
+
+        Logger.info('🔍 Начинаем рассылку', {
+            totalUsers: allUsers ? allUsers.length : 0,
+            users: allUsers ? allUsers : []
         });
-        
+
         if (!allUsers || allUsers.length === 0) {
             this.bot.sendMessage(adminChatId, '❌ Нет пользователей для рассылки');
             return;
@@ -336,31 +396,30 @@ class AdminService {
         let blockedCount = 0;
         const sentUsers = new Set();
 
-        Logger.info('🔍 Пользователи для рассылки', { 
-            totalUsers: allUsers.length, 
+        Logger.info('🔍 Пользователи для рассылки', {
+            totalUsers: allUsers.length,
             users: allUsers,
             uniqueUsers: [...new Set(allUsers)]
         });
-        
+
         const uniqueUsers = [...new Set(allUsers)];
         Logger.info('🔍 Уникальные пользователи', { uniqueUsers });
-        
+
         for (const userId of uniqueUsers) {
-                    // Пропускаем админа
-        const numericAdminChatId = Number(this.adminChatId);
-        Logger.info('🔍 Проверяем админа', { 
-            userId, 
-            adminChatId: this.adminChatId,
-            numericAdminChatId,
-            isAdmin: userId === numericAdminChatId 
-        });
-        if (userId === numericAdminChatId) {
-            Logger.info('🔍 Пропускаем админа', { userId });
-            continue;
-        }
-            
+            const numericAdminChatId = Number(this.adminChatId);
+            Logger.info('🔍 Проверяем админа', {
+                userId,
+                adminChatId: this.adminChatId,
+                numericAdminChatId,
+                isAdmin: userId === numericAdminChatId
+            });
+            if (userId === numericAdminChatId) {
+                Logger.info('🔍 Пропускаем админа', { userId });
+                continue;
+            }
+
             Logger.info('🔍 Обрабатываем пользователя', { userId, alreadySent: sentUsers.has(userId) });
-            
+
             if (sentUsers.has(userId)) {
                 Logger.warn('🔍 Пропускаем дубликат', { userId });
                 continue;
@@ -372,13 +431,13 @@ class AdminService {
                 successCount++;
                 sentUsers.add(userId);
                 Logger.info('✅ Сообщение отправлено', { userId, successCount });
-                
+
                 await new Promise(resolve => setTimeout(resolve, 100));
-                
+
             } catch (error) {
                 failCount++;
                 Logger.error('❌ Ошибка отправки', { userId, error: error.message });
-                
+
                 if (error.code === 'ETELEGRAM' && error.message.includes('chat not found')) {
                     blockedCount++;
                     Logger.warn(`Пользователь ${userId} заблокировал бота или не существует`, { userId, error: error.message });
@@ -398,16 +457,16 @@ ${message}`;
 
         this.bot.sendMessage(adminChatId, summaryMessage);
 
-        Logger.info('🔍 Финальная статистика рассылки', { 
-            allUsers: allUsers, 
-            allUsersType: typeof allUsers, 
-            allUsersLength: allUsers ? allUsers.length : 'undefined',
+        Logger.info('🔍 Финальная статистика рассылки', {
+            allUsers: allUsers || [],
+            allUsersType: typeof allUsers,
+            allUsersLength: allUsers ? allUsers.length : 0,
             allUsersIsArray: Array.isArray(allUsers),
             successCount,
             failCount,
             blockedCount
         });
-        
+
         const userCount = allUsers && allUsers.length ? allUsers.length : 0;
         Logger.adminAction(`отправил рассылку ${userCount} пользователям`, adminChatId);
     }
@@ -452,7 +511,7 @@ ${message}`;
         const hours = Math.floor(uptime / 3600);
         const minutes = Math.floor((uptime % 3600) / 60);
         const seconds = Math.floor(uptime % 60);
-        
+
         return `${hours}ч ${minutes}м ${seconds}с`;
     }
 }

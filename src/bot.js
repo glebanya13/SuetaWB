@@ -13,7 +13,7 @@ class SuetaWBBot {
         this.adminService = null;
         this.commandHandler = new CommandHandler(this.bot, this.userService);
         this.callbackHandler = new CallbackHandler(this.bot, this.userService, this.commandHandler);
-        
+
         this.setupBot();
         this.setupAdminPanel();
     }
@@ -22,7 +22,7 @@ class SuetaWBBot {
         this.bot.onText(/\/start/, (msg) => {
             try {
                 const isAdmin = config.admin.chatId && msg.chat.id.toString() === config.admin.chatId.toString();
-                
+
                 if (isAdmin) {
                     this.adminService.showAdminMenu(msg.chat.id);
                     Logger.adminAction('запустил бота (админ)', msg.chat.id);
@@ -106,7 +106,7 @@ class SuetaWBBot {
             if (text && text.startsWith('/')) {
                 return;
             }
-            
+
             if (this.adminService) {
                 if (this.adminService.waitingForBroadcast) {
                     if (!text) {
@@ -142,7 +142,7 @@ class SuetaWBBot {
                     this.bot.sendMessage(chatId, '📸 В главном меню принимаются только текстовые сообщения. Выберите один из пунктов меню.');
                 }
                 break;
-                
+
             case 'waiting_payment_screenshot':
                 const paymentInfo = this.commandHandler.handlePaymentScreenshot(chatId, msg);
                 Logger.info('🚨 Получен paymentInfo от handlePaymentScreenshot', { chatId, paymentInfo });
@@ -154,7 +154,7 @@ class SuetaWBBot {
                     Logger.warn('🚨 paymentInfo пустой или adminService недоступен', { chatId, paymentInfo, hasAdminService: !!this.adminService });
                 }
                 break;
-                
+
             default:
                 this.userService.resetToMainMenu(chatId);
                 break;
@@ -166,7 +166,7 @@ class SuetaWBBot {
         const data = query.data;
 
         const isAdmin = config.admin.chatId && chatId.toString() === config.admin.chatId.toString();
-        
+
         if (isAdmin) {
             Logger.callbackEvent(data, chatId, true);
             this.adminService.handleAdminCallback(query);
@@ -179,16 +179,22 @@ class SuetaWBBot {
     start() {
         Logger.botStart();
         Logger.info('📱 Используйте /start для начала работы');
-        
+
         process.on('SIGINT', () => {
             Logger.botStop();
             this.bot.stopPolling();
+            if (this.userService) {
+                this.userService.close();
+            }
             process.exit(0);
         });
 
         process.on('SIGTERM', () => {
             Logger.botStop();
             this.bot.stopPolling();
+            if (this.userService) {
+                this.userService.close();
+            }
             process.exit(0);
         });
     }

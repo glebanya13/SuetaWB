@@ -5,7 +5,7 @@ class BotLogger {
 
     setLogLevel() {
         const env = process.env.NODE_ENV || 'production';
-        
+
         switch (env) {
             case 'development':
                 this.currentLevel = 'debug';
@@ -59,21 +59,21 @@ class BotLogger {
         const timestamp = this.formatTimestamp();
         const emoji = this.getLevelEmoji(level);
         const levelUpper = level.toUpperCase().padEnd(5);
-        
+
         let formattedMessage = `${emoji} [${timestamp}] ${levelUpper} ${message}`;
-        
+
         if (data) {
             formattedMessage += '\n' + this.formatData(data);
         }
-        
+
         return formattedMessage;
     }
 
     log(level, message, data = null) {
         if (!this.shouldLog(level)) return;
-        
+
         const formattedMessage = this.formatMessage(level, message, data);
-        
+
         switch (level) {
             case 'fatal':
             case 'error':

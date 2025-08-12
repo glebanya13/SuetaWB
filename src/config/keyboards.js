@@ -1,4 +1,3 @@
-// Клавиатуры для клиентов
 const mainKeyboard = {
     reply_markup: {
         keyboard: [
@@ -22,7 +21,6 @@ const paymentKeyboard = {
     }
 };
 
-// Клавиатуры для админа
 const adminMainKeyboard = {
     reply_markup: {
         keyboard: [
@@ -46,11 +44,9 @@ const adminInlineKeyboard = {
 };
 
 module.exports = {
-    // Клиентские клавиатуры
     mainKeyboard,
     paymentKeyboard,
     
-    // Админские клавиатуры
     adminMainKeyboard,
     adminInlineKeyboard
 };
