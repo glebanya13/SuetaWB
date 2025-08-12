@@ -1,0 +1,26 @@
+{
+  "name": "sueta-wb-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for marketplace business services",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "marketplace",
+    "business"
+  ],
+  "author": "Philipp",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^12.2.0",
+    "dotenv": "^16.3.1",
+    "node-telegram-bot-api": "^0.64.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
