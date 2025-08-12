@@ -96,8 +96,6 @@ class AdminService {
                 return;
             }
 
-
-
             const summaryMessage = `📊 Итого:
 ⏳ Ожидающих: ${totalPending}
 ✅ Подтвержденных: ${dbCompletedPayments.filter(p => p.status === 'confirmed').length}
@@ -487,9 +485,7 @@ ${message}`;
 
 🔑 ID канала: ${process.env.CHANNEL_ID || 'не установлен'}
 👤 ID админа: ${this.adminChatId}
-🌐 Версия: 1.0.0
-
-Используйте переменные окружения для изменения настроек.`;
+🌐 Версия: 1.0.0`;
 
         this.bot.sendMessage(chatId, message);
     }

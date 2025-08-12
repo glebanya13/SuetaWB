@@ -46,7 +46,7 @@ const adminInlineKeyboard = {
 module.exports = {
     mainKeyboard,
     paymentKeyboard,
-    
+
     adminMainKeyboard,
     adminInlineKeyboard
 };

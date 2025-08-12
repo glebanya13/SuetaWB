@@ -5,26 +5,26 @@ const Logger = require('../utils/logger');
 class DatabaseService {
     constructor() {
         const dbPath = path.join(__dirname, '../../data/suetawb_bot.db');
-        
+
         const fs = require('fs');
         const dbDir = path.dirname(dbPath);
         if (!fs.existsSync(dbDir)) {
             fs.mkdirSync(dbDir, { recursive: true });
         }
-        
+
         this.db = new Database(dbPath);
-        
+
         this.db.pragma('journal_mode = DELETE');
         this.db.pragma('synchronous = NORMAL');
         this.db.pragma('foreign_keys = ON');
-        
+
         this.initDatabase();
-        
+
         const cleanedCount = this.cleanInvalidPhotoFileIds();
         if (cleanedCount > 0) {
             Logger.info(`Очищено ${cleanedCount} некорректных photo_file_id при инициализации`);
         }
-        
+
         Logger.info('База данных инициализирована', { path: dbPath });
     }
 
@@ -81,16 +81,16 @@ class DatabaseService {
             INSERT OR REPLACE INTO users (chat_id, username, first_name, last_name, updated_at)
             VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
         `);
-        
+
         const result = stmt.run(
             chatId,
             userData.username || null,
             userData.first_name || null,
             userData.last_name || null
         );
-        
+
         Logger.debug('Пользователь добавлен/обновлен в БД', { chatId, result: result.changes });
-        
+
         if (result.changes > 0) {
             Logger.info('👤 Новый пользователь добавлен в БД:', {
                 chat_id: chatId,
@@ -100,14 +100,14 @@ class DatabaseService {
                 timestamp: new Date().toISOString()
             });
         }
-        
+
         return result.changes > 0;
     }
 
     getUser(chatId) {
         const stmt = this.db.prepare('SELECT * FROM users WHERE chat_id = ?');
         const user = stmt.get(chatId);
-        
+
         if (user) {
             Logger.debug('🔍 Информация о пользователе запрошена:', {
                 chat_id: user.chat_id,
@@ -121,7 +121,7 @@ class DatabaseService {
         } else {
             Logger.debug('❓ Пользователь не найден в БД:', { chat_id: chatId });
         }
-        
+
         return user;
     }
 
@@ -131,16 +131,16 @@ class DatabaseService {
             FROM users u 
             ORDER BY u.updated_at DESC
         `);
-        
+
         const users = stmt.all();
         const uniqueUsers = new Set(users.map(u => u.chat_id));
-        
-        Logger.debug('Получены все пользователи из БД', { 
-            rawCount: users.length, 
+
+        Logger.debug('Получены все пользователи из БД', {
+            rawCount: users.length,
             uniqueCount: uniqueUsers.size,
             users: Array.from(uniqueUsers)
         });
-        
+
         if (users.length > 0) {
             Logger.info('📋 Список всех пользователей в БД:', {
                 total: users.length,
@@ -156,54 +156,54 @@ class DatabaseService {
         } else {
             Logger.warn('⚠️ В БД нет пользователей для рассылки');
         }
-        
+
         return Array.from(uniqueUsers);
     }
 
     getUserCount() {
         const stmt = this.db.prepare('SELECT COUNT(*) as count FROM users');
         const count = stmt.get().count;
-        
-        Logger.debug('📊 Количество пользователей в БД:', { 
+
+        Logger.debug('📊 Количество пользователей в БД:', {
             totalUsers: count,
             timestamp: new Date().toISOString()
         });
-        
+
         return count;
     }
 
     addPayment(userChatId, paymentInfo) {
         Logger.info('Попытка добавить платеж в БД', { userChatId, paymentInfo });
-        
+
         const userExists = this.db.prepare('SELECT chat_id FROM users WHERE chat_id = ?').get(userChatId);
         Logger.info('🔍 Проверка существования пользователя:', { userChatId, userExists: !!userExists });
-        
+
         if (!userExists) {
             Logger.error('❌ Пользователь не найден в БД, не можем добавить платеж', { userChatId });
             throw new Error(`Пользователь с ID ${userChatId} не найден в БД`);
         }
-        
+
         const stmt = this.db.prepare(`
             INSERT INTO payments (user_chat_id, period, amount, photo_file_id, status)
             VALUES (?, ?, ?, ?, 'pending')
         `);
-        
-        Logger.info('🔍 Выполняем INSERT с параметрами:', { 
-            userChatId, 
-            period: paymentInfo.period, 
-            amount: paymentInfo.amount, 
-            photoFileId: paymentInfo.photoFileId || null 
+
+        Logger.info('🔍 Выполняем INSERT с параметрами:', {
+            userChatId,
+            period: paymentInfo.period,
+            amount: paymentInfo.amount,
+            photoFileId: paymentInfo.photoFileId || null
         });
-        
+
         const result = stmt.run(
             userChatId,
             paymentInfo.period,
             paymentInfo.amount,
             paymentInfo.photoFileId || null
         );
-        
+
         Logger.debug('Платеж добавлен в БД', { userChatId, paymentId: result.lastInsertRowid });
-        
+
         Logger.info('💰 Новый платеж добавлен в БД:', {
             payment_id: result.lastInsertRowid,
             user_chat_id: userChatId,
@@ -213,13 +213,13 @@ class DatabaseService {
             status: 'pending',
             timestamp: new Date().toISOString()
         });
-        
+
         return result.lastInsertRowid;
     }
 
     getPendingPayments() {
         Logger.info('Запрашиваем ожидающие платежи из БД');
-        
+
         const stmt = this.db.prepare(`
             SELECT p.*, u.username, u.first_name, u.last_name
             FROM payments p
@@ -227,9 +227,9 @@ class DatabaseService {
             WHERE p.status = 'pending' 
             ORDER BY p.created_at ASC
         `);
-        
+
         const payments = stmt.all();
-        
+
         Logger.info('📋 Ожидающие платежи запрошены из БД:', {
             total_payments: payments.length,
             payments: payments.map(p => ({
@@ -244,13 +244,13 @@ class DatabaseService {
                 created_at: p.created_at
             }))
         });
-        
+
         return payments;
     }
 
     getConfirmedPayments() {
         Logger.info('Запрашиваем завершенные платежи из БД');
-        
+
         const allPayments = this.db.prepare('SELECT * FROM payments').all();
         Logger.info('🔍 Все платежи в БД для проверки:', {
             total: allPayments.length,
@@ -262,7 +262,7 @@ class DatabaseService {
                 amount: p.amount
             }))
         });
-        
+
         const stmt = this.db.prepare(`
             SELECT p.*, u.username, u.first_name, u.last_name
             FROM payments p
@@ -270,9 +270,9 @@ class DatabaseService {
             WHERE p.status IN ('confirmed', 'rejected') 
             ORDER BY p.updated_at DESC
         `);
-        
+
         const payments = stmt.all();
-        
+
         Logger.info('📋 Завершенные платежи запрошены из БД:', {
             total_payments: payments.length,
             payments: payments.map(p => ({
@@ -289,19 +289,19 @@ class DatabaseService {
                 updated_at: p.updated_at
             }))
         });
-        
+
         return payments;
     }
 
     getAllPayments() {
         Logger.info('Запрашиваем ВСЕ платежи из БД');
-        
+
         const stmt = this.db.prepare(`
             SELECT * FROM payments ORDER BY created_at DESC
         `);
-        
+
         const allPayments = stmt.all();
-        
+
         Logger.info('📋 Все платежи в БД:', {
             total_payments: allPayments.length,
             payments: allPayments.map(p => ({
@@ -314,7 +314,7 @@ class DatabaseService {
                 created_at: p.created_at
             }))
         });
-        
+
         return allPayments;
     }
 
@@ -324,7 +324,7 @@ class DatabaseService {
             SET status = ?, reason = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         `);
-        
+
         const result = stmt.run(status, reason, paymentId);
         Logger.debug('Статус платежа обновлен', { paymentId, status, changes: result.changes });
         return result.changes > 0;
@@ -336,7 +336,7 @@ class DatabaseService {
             SET status = ?, reason = ?, updated_at = CURRENT_TIMESTAMP
             WHERE user_chat_id = ? AND status = 'pending'
         `);
-        
+
         const result = stmt.run(status, reason, userChatId);
         Logger.info('Статус платежа обновлен по user_chat_id', { userChatId, status, changes: result.changes });
         return result.changes > 0;
@@ -354,16 +354,16 @@ class DatabaseService {
             INSERT OR REPLACE INTO user_states (chat_id, state, payment_period, payment_amount, updated_at)
             VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
         `);
-        
+
         const result = stmt.run(
             chatId,
             state,
             paymentInfo?.period || null,
             paymentInfo?.amount || null
         );
-        
+
         Logger.debug('Состояние пользователя обновлено', { chatId, state, changes: result.changes });
-        
+
         if (result.changes > 0) {
             Logger.info('🔄 Состояние пользователя обновлено в БД:', {
                 chat_id: chatId,
@@ -373,14 +373,14 @@ class DatabaseService {
                 timestamp: new Date().toISOString()
             });
         }
-        
+
         return result.changes > 0;
     }
 
     getUserState(chatId) {
         const stmt = this.db.prepare('SELECT * FROM user_states WHERE chat_id = ?');
         const userState = stmt.get(chatId);
-        
+
         if (userState) {
             Logger.debug('🔍 Состояние пользователя запрошено:', {
                 chat_id: userState.chat_id,
@@ -392,7 +392,7 @@ class DatabaseService {
         } else {
             Logger.debug('❓ Состояние пользователя не найдено в БД:', { chat_id: chatId });
         }
-        
+
         return userState;
     }
 
@@ -402,28 +402,28 @@ class DatabaseService {
 
     getStats() {
         const stats = {};
-        
+
         const userCountStmt = this.db.prepare('SELECT COUNT(*) as count FROM users');
         stats.totalUsers = userCountStmt.get().count;
-        
+
         const allPaymentsStmt = this.db.prepare('SELECT COUNT(*) as count FROM payments');
         stats.totalPayments = allPaymentsStmt.get().count;
-        
+
         const pendingPaymentsStmt = this.db.prepare('SELECT COUNT(*) as count FROM payments WHERE status = ?');
         stats.pendingPayments = pendingPaymentsStmt.get('pending').count;
-        
+
         const confirmedPaymentsStmt = this.db.prepare('SELECT COUNT(*) as count FROM payments WHERE status = ?');
         stats.confirmedPayments = confirmedPaymentsStmt.get('confirmed').count;
-        
+
         const rejectedPaymentsStmt = this.db.prepare('SELECT COUNT(*) as count FROM payments WHERE status = ?');
         stats.rejectedPayments = rejectedPaymentsStmt.get('rejected').count;
-        
+
         const totalAmountStmt = this.db.prepare('SELECT SUM(amount) as total FROM payments');
         stats.totalAmount = totalAmountStmt.get().total || 0;
-        
+
         const confirmedAmountStmt = this.db.prepare('SELECT SUM(amount) as total FROM payments WHERE status = ?');
         stats.confirmedAmount = confirmedAmountStmt.get('confirmed').total || 0;
-        
+
         Logger.info('📊 Статистика пользователей в БД:', {
             totalUsers: stats.totalUsers,
             totalPayments: stats.totalPayments,
@@ -433,56 +433,56 @@ class DatabaseService {
             totalAmount: stats.totalAmount,
             confirmedAmount: stats.confirmedAmount
         });
-        
+
         return stats;
     }
 
     migrateFromMemory(userStates, allUsers, pendingPayments) {
         Logger.info('Начинаем миграцию данных из памяти в БД');
-        
+
         for (const chatId of allUsers) {
             this.addUser(chatId);
         }
-        
+
         for (const [chatId, state] of userStates) {
             this.setUserState(chatId, state);
         }
-        
+
         for (const [chatId, paymentInfo] of pendingPayments) {
             this.addPayment(chatId, paymentInfo);
         }
-        
+
         Logger.info('Миграция данных завершена');
     }
 
     deleteUser(chatId) {
         try {
             this.db.exec('BEGIN TRANSACTION');
-            
+
             const deleteStatesStmt = this.db.prepare('DELETE FROM user_states WHERE chat_id = ?');
             const deletePaymentsStmt = this.db.prepare('DELETE FROM payments WHERE user_chat_id = ?');
             const deleteUserStmt = this.db.prepare('DELETE FROM users WHERE chat_id = ?');
-            
+
             const statesResult = deleteStatesStmt.run(chatId);
             Logger.debug('Удалены состояния пользователя', { chatId, deletedStates: statesResult.changes });
-            
+
             const paymentsResult = deletePaymentsStmt.run(chatId);
             Logger.debug('Удалены платежи пользователя', { chatId, deletedPayments: paymentsResult.changes });
-            
+
             const userResult = deleteUserStmt.run(chatId);
             Logger.debug('Удален пользователь', { chatId, deletedUser: userResult.changes });
-            
+
             this.db.exec('COMMIT');
-            
-            Logger.info('Пользователь безопасно удален из БД', { 
-                chatId, 
+
+            Logger.info('Пользователь безопасно удален из БД', {
+                chatId,
                 deletedStates: statesResult.changes,
                 deletedPayments: paymentsResult.changes,
                 deletedUser: userResult.changes
             });
-            
+
             return true;
-            
+
         } catch (error) {
             this.db.exec('ROLLBACK');
             Logger.error('Ошибка при удалении пользователя', { chatId, error: error.message });
@@ -493,20 +493,20 @@ class DatabaseService {
     clearAllData() {
         try {
             Logger.warn('Начинаем полную очистку базы данных');
-            
+
             this.db.pragma('foreign_keys = OFF');
-            
+
             this.db.exec(`
                 DELETE FROM user_states;
                 DELETE FROM payments;
                 DELETE FROM users;
             `);
-            
+
             this.db.pragma('foreign_keys = ON');
-            
+
             Logger.info('База данных полностью очищена');
             return true;
-            
+
         } catch (error) {
             Logger.error('Ошибка при очистке базы данных', error);
             return false;
@@ -516,7 +516,7 @@ class DatabaseService {
     cleanInvalidPhotoFileIds() {
         try {
             Logger.warn('Начинаем очистку некорректных photo_file_id');
-            
+
             const updateStmt = this.db.prepare(`
                 UPDATE payments 
                 SET photo_file_id = NULL 
@@ -525,16 +525,16 @@ class DatabaseService {
                 OR photo_file_id IS NULL
                 OR photo_file_id NOT LIKE '%_%'
             `);
-            
+
             const result = updateStmt.run();
-            
+
             Logger.info('Некорректные photo_file_id очищены', {
                 updatedRows: result.changes,
                 timestamp: new Date().toISOString()
             });
-            
+
             return result.changes;
-            
+
         } catch (error) {
             Logger.error('Ошибка при очистке некорректных photo_file_id', error);
             return 0;

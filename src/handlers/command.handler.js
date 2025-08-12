@@ -10,13 +10,13 @@ class CommandHandler {
 
     handleStart(msg) {
         const chatId = msg.chat.id;
-        
+
         this.userService.addUser(chatId, {
             username: msg.from.username,
             first_name: msg.from.first_name,
             last_name: msg.from.last_name
         });
-        
+
         const welcomeMessage = `Привет! Я — Филипп, автор канала ${config.channel.id}.
 
 Дам готовые решения по товарам, идеям для продажи на маркетплейсах. А также поделюсь контактами производств в РФ и СНГ. Также можем провести аудит и прокачать ваши продажи.
@@ -25,7 +25,7 @@ class CommandHandler {
 
         this.userService.resetToMainMenu(chatId);
         this.bot.sendMessage(chatId, welcomeMessage, mainKeyboard);
-        
+
         Logger.userAction('начал работу с ботом', chatId, msg.from.username);
     }
 
@@ -83,7 +83,7 @@ ${config.payment.info}
 
         this.userService.setPaymentInfo(chatId, period, amount);
         this.userService.setState(chatId, 'waiting_payment_screenshot');
-        
+
         this.bot.sendMessage(chatId, paymentMessage, {
             reply_markup: {
                 keyboard: [['🔙 Назад к меню']],
@@ -91,7 +91,7 @@ ${config.payment.info}
                 one_time_keyboard: false
             }
         });
-        
+
         Logger.paymentEvent('выбрал период оплаты', chatId, amount, period);
     }
 
@@ -110,7 +110,7 @@ ${config.payment.info}
         if (msg.photo) {
             const photo = msg.photo[msg.photo.length - 1];
             const paymentInfo = this.userService.getPaymentInfo(chatId);
-            
+
             if (!paymentInfo || !paymentInfo.period || !paymentInfo.amount) {
                 Logger.error('Информация о платеже не найдена', { chatId, paymentInfo });
                 this.bot.sendMessage(chatId, '❌ Ошибка: информация о платеже не найдена. Попробуйте выбрать период оплаты заново.');
@@ -118,15 +118,15 @@ ${config.payment.info}
                 this.showMainMenu(chatId);
                 return null;
             }
-            
+
             this.bot.sendMessage(chatId, `✅ Скриншот оплаты получен! 
 
 Ожидайте подтверждения. После проверки вы получите ссылку на закрытый канал ${config.channel.id}.
 
 Обычно это занимает 5-15 минут.`, mainKeyboard);
-            
+
             this.userService.resetToMainMenu(chatId);
-            
+
             return {
                 username: msg.from.username || msg.from.first_name,
                 period: paymentInfo.period,

@@ -19,24 +19,24 @@ class CallbackHandler {
         }
 
         let isUserCallbackHandled = false;
-        
+
         switch (data) {
             case 'pay_1month':
                 this.commandHandler.handlePayment(chatId, config.payment.plans.month1.period, config.payment.plans.month1.amount);
                 isUserCallbackHandled = true;
                 break;
-                
+
             case 'pay_6months':
                 this.commandHandler.handlePayment(chatId, config.payment.plans.month6.period, config.payment.plans.month6.amount);
                 isUserCallbackHandled = true;
                 break;
-                
+
             case 'back_to_main':
                 this.userService.resetToMainMenu(chatId);
                 this.commandHandler.showMainMenu(chatId);
                 isUserCallbackHandled = true;
                 break;
-                
+
             default:
                 break;
         }
@@ -46,7 +46,7 @@ class CallbackHandler {
         }
 
         this.bot.answerCallbackQuery(query.id);
-        
+
         return isUserCallbackHandled;
     }
 }
