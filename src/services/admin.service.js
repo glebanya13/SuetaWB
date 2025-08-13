@@ -96,16 +96,7 @@ class AdminService {
                 return;
             }
 
-            const summaryMessage = `📊 Итого:
-⏳ Ожидающих: ${totalPending}
-✅ Подтвержденных: ${dbCompletedPayments.filter(p => p.status === 'confirmed').length}
-❌ Отклоненных: ${dbCompletedPayments.filter(p => p.status === 'rejected').length}`;
-
-            this.bot.sendMessage(chatId, summaryMessage);
-
             if (totalPending > 0) {
-                this.bot.sendMessage(chatId, `\n📋 Ожидающие платежи (${totalPending}):`);
-
                 let counter = 1;
                 for (const payment of dbPendingPayments) {
                     const message = `💰 Платеж ${counter}:
@@ -141,27 +132,8 @@ class AdminService {
 
                     counter++;
                 }
-            }
-
-            if (totalCompleted > 0) {
-                this.bot.sendMessage(chatId, `\n📋 Завершенные платежи (${totalCompleted}):`);
-
-                let counter = 1;
-                for (const payment of dbCompletedPayments) {
-                    const statusEmoji = payment.status === 'confirmed' ? '✅' : '❌';
-                    const statusText = payment.status === 'confirmed' ? 'Подтвержден' : 'Отклонен';
-
-                    const message = `${statusEmoji} Платеж ${counter}:
-
-👤 Пользователь: ${payment.username || 'без username'}
-📅 Период: ${payment.period}
-💰 Сумма: ${payment.amount}₽
-📊 Статус: ${statusText}
-⏰ Завершен: ${payment.updated_at}`;
-
-                    this.bot.sendMessage(chatId, message);
-                    counter++;
-                }
+            } else {
+                this.bot.sendMessage(chatId, '✅ Нет ожидающих платежей');
             }
         } catch (error) {
             Logger.error('Ошибка при показе платежей', { chatId, error: error.message });
@@ -248,10 +220,10 @@ class AdminService {
         this.bot.sendMessage(userChatId, message);
 
         try {
-            const updated = this.database.updatePaymentStatusByUserId(userChatId, 'confirmed', reason);
-            Logger.info('Статус платежа обновлен в БД:', { userChatId, updated });
+            const deleted = this.database.deletePaymentByUserId(userChatId);
+            Logger.info('Платеж удален из БД после подтверждения:', { userChatId, deleted });
         } catch (error) {
-            Logger.error('Ошибка при обновлении статуса в БД:', error.message);
+            Logger.error('Ошибка при удалении платежа из БД:', error.message);
         }
 
         this.pendingPayments.delete(userChatId);
@@ -313,10 +285,10 @@ class AdminService {
         this.bot.sendMessage(userChatId, message);
 
         try {
-            const updated = this.database.updatePaymentStatusByUserId(userChatId, 'rejected', reason);
-            Logger.info('Статус платежа отклонен в БД:', { userChatId, updated });
+            const deleted = this.database.deletePaymentByUserId(userChatId);
+            Logger.info('Платеж удален из БД после отклонения:', { userChatId, deleted });
         } catch (error) {
-            Logger.error('Ошибка при отклонении платежа в БД:', error.message);
+            Logger.error('Ошибка при удалении платежа из БД:', error.message);
         }
 
         this.pendingPayments.delete(userChatId);

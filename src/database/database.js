@@ -541,6 +541,23 @@ class DatabaseService {
         }
     }
 
+    deletePaymentByUserId(userChatId) {
+        try {
+            const stmt = this.db.prepare('DELETE FROM payments WHERE user_chat_id = ?');
+            const result = stmt.run(userChatId);
+
+            Logger.info('Платеж удален из БД по user_chat_id', {
+                userChatId,
+                deletedRows: result.changes
+            });
+
+            return result.changes > 0;
+        } catch (error) {
+            Logger.error('Ошибка при удалении платежа по user_chat_id', { userChatId, error: error.message });
+            return false;
+        }
+    }
+
     close() {
         if (this.db) {
             this.db.close();
