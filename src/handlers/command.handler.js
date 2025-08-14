@@ -17,7 +17,7 @@ class CommandHandler {
             last_name: msg.from.last_name
         });
 
-        const welcomeMessage = `Привет! Я — Филипп, автор канала ${config.channel.id}.
+        const welcomeMessage = `Привет! Я — Филипп, автор канала @suetanawb.
 
 Дам готовые решения по товарам, идеям для продажи на маркетплейсах. А также поделюсь контактами производств в РФ и СНГ. Также можем провести аудит и прокачать ваши продажи.
 
