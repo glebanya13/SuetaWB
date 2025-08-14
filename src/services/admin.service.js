@@ -208,10 +208,10 @@ class AdminService {
             return false;
         }
 
-        const channelLink = `https://t.me/${process.env.CHANNEL_ID?.replace('@', '')}`;
+        const channelLink = process.env.CHANNEL_ID;
         const message = `✅ Платеж подтвержден!
 
-Добро пожаловать в закрытый канал ${process.env.CHANNEL_ID}!
+Добро пожаловать в закрытый канал!
 
 Ссылка: ${channelLink}
 
